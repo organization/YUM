@@ -12,8 +12,12 @@ import cn.nukkit.plugin.PluginBase;
 import cn.nukkit.utils.Config;
 
 public class YUMPlugin extends PluginBase {
+	private static YUMPlugin instance;
+
 	@Override
 	public void onLoad() {
+		instance = this;
+
 		YUM.config = new Config(this.getDataFolder() + "repos.json", Config.JSON);
 		YUM.init();
 		YUM.UpdateUpgrade();
@@ -44,40 +48,40 @@ public class YUMPlugin extends PluginBase {
 					sender.sendMessage("/YUM INSTALL <NAME>");
 					break;
 				}
-				YUM.InstallPackage(args[1]);
+				YUM.InstallPackage(sender, args[1]);
 				break;
 			case "remove":
 				if (args.length < 2) {
 					sender.sendMessage("/YUM REMOVE <NAME>");
 					break;
 				}
-				YUM.RemovePackage(args[1]);
+				YUM.RemovePackage(sender, args[1]);
 				break;
 			case "add":
 				if (args.length < 2) {
 					sender.sendMessage("/YUM ADD <URL>");
 					break;
 				}
-				YUM.AddRepository(args[1]);
+				YUM.AddRepository(sender, args[1]);
 				break;
 			case "del":
 				if (args.length < 2) {
 					sender.sendMessage("/YUM DEL <URL>");
 					break;
 				}
-				YUM.DeleteRepository(args[1]);
+				YUM.DeleteRepository(sender, args[1]);
 				break;
 			case "list":
-				YUM.ShowRepositoryList();
+				YUM.ShowRepositoryList(sender);
 				break;
 			case "autoupgrade":
-				YUM.AutoUpgrade();
+				YUM.AutoUpgrade(sender);
 				break;
 			case "update":
-				YUM.Update();
+				YUM.Update(sender);
 				break;
 			case "upgrade":
-				YUM.Upgrade();
+				YUM.Upgrade(sender);
 				break;
 			default:
 				this.sendHelpMessage(sender);
@@ -116,5 +120,9 @@ public class YUMPlugin extends PluginBase {
 		String DEFAULT = (isOp) ? Permission.DEFAULT_OP : Permission.DEFAULT_TRUE;
 		Permission permission = Permission.loadPermission(permissionName, data, DEFAULT);
 		return this.getServer().getPluginManager().addPermission(permission);
+	}
+
+	public static YUMPlugin getInstance() {
+		return YUMPlugin.instance;
 	}
 }
