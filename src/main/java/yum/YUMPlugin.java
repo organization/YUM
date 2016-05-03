@@ -1,5 +1,6 @@
 package yum;
 
+import java.io.File;
 import java.util.LinkedHashMap;
 
 import cn.nukkit.command.Command;
@@ -18,15 +19,16 @@ public class YUMPlugin extends PluginBase {
 	public void onLoad() {
 		instance = this;
 
-		YUM.config = new Config(this.getDataFolder() + "repos.json", Config.JSON);
+		this.getDataFolder().mkdirs();
+		YUM.config = new Config(new File(this.getDataFolder(), "repos.json"), Config.JSON);
 		YUM.init();
-		YUM.UpdateUpgrade();
 	}
 
 	@Override
 	public void onEnable() {
 		this.registerPermission("yum.commands.run", true, "JAR Package Online Install&Update Permission");
 		this.registerCommand("yum", "yum.commands.run", "JAR Package Online Install&Update", "/yum");
+		YUM.UpdateUpgrade();
 	}
 
 	@Override
@@ -43,7 +45,7 @@ public class YUMPlugin extends PluginBase {
 			}
 
 			switch (args[0].toLowerCase()) {
-			case "install:":
+			case "install":
 				if (args.length < 2) {
 					sender.sendMessage("/YUM INSTALL <NAME>");
 					break;
@@ -62,7 +64,8 @@ public class YUMPlugin extends PluginBase {
 					sender.sendMessage("/YUM ADD <URL>");
 					break;
 				}
-				YUM.AddRepository(sender, args[1]);
+				boolean isFullPack = (args.length > 2 && args[2].toLowerCase().equals("full")) ? true : false;
+				YUM.AddRepository(sender, args[1], isFullPack);
 				break;
 			case "del":
 				if (args.length < 2) {
@@ -95,7 +98,7 @@ public class YUMPlugin extends PluginBase {
 	public void sendHelpMessage(CommandSender sender) {
 		sender.sendMessage("/YUM INSTALL <NAME> - INSTALL JAR PACKAGE");
 		sender.sendMessage("/YUM REMOVE <NAME> - REMOVE JAR PACKAGE");
-		sender.sendMessage("/YUM ADD <URL> - ADD JAR PACKAGE REPO URL");
+		sender.sendMessage("/YUM ADD <URL> - ADD JAR PACKAGE REPO URL <+FULL>");
 		sender.sendMessage("/YUM DEL <URL> - REMOVE JAR PACKAGE REPO URL");
 		sender.sendMessage("/YUM LIST - SHOW JAR PACKAGE REPO URL LIST");
 		sender.sendMessage("/YUM AUTOUPGRADE - TURN AUTOMATIC UPDATING ON OR OFF");

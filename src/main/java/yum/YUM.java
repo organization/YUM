@@ -1,58 +1,83 @@
 package yum;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 
 import com.google.gson.GsonBuilder;
+import com.google.gson.internal.LinkedTreeMap;
 import com.google.gson.reflect.TypeToken;
 
 import cn.nukkit.Player;
 import cn.nukkit.Server;
 import cn.nukkit.command.CommandSender;
+import cn.nukkit.plugin.Plugin;
 import cn.nukkit.scheduler.AsyncTask;
+import cn.nukkit.scheduler.Task;
 import cn.nukkit.utils.Config;
 import jline.internal.InputStreamReader;
 
 public class YUM {
 	public static Config config;
-	public static LinkedHashMap<String, LinkedHashMap<String, Object>> linkMap = new LinkedHashMap<>();
+	public static LinkedHashMap<String, LinkedTreeMap<String, Object>> repos = new LinkedHashMap<>();
+	public static LinkedHashMap<String, LinkedTreeMap<String, Object>> fullrepos = new LinkedHashMap<>();
 
 	public static void init() {
 		if (config.get("autoupgrade") == null || !(config.get("autoupgrade") instanceof Boolean))
 			config.set("autoupgrade", true);
 
-		if (config.get("repos") == null || !(config.get("repos") instanceof ArrayList))
-			config.set("repos", new ArrayList<String>());
+		if (config.get("repos") == null || !(config.get("repos") instanceof ArrayList)) {
+			ArrayList<String> repos = new ArrayList<String>();
+			repos.add("https://github.com/organization/YUM/raw/master/YUM.json");
+			config.set("repos", repos);
+		}
 
-		if (config.get("installed") == null || !(config.get("installed") instanceof ArrayList))
-			config.set("installed", new ArrayList<String>());
+		if (config.get("fullrepos") == null || !(config.get("fullrepos") instanceof ArrayList))
+			config.set("fullrepos", new ArrayList<String>());
 	}
 
-	public static void InstallPackage(CommandSender sender, String name) {
-		if (linkMap.get("name") == null) {
-			sender.sendMessage("* NOT FOUND PACKAGE: " + name);
+	public static void InstallPackage(CommandSender sender, String pluginName) {
+		if (repos.get(pluginName) == null) {
+			sender.sendMessage("* NOT FOUND PACKAGE: " + pluginName);
 			return;
 		}
+		sender.sendMessage("* DOWNLOAD:" + pluginName);
+		YUM.UpdatePlugin(sender, pluginName);
 	}
 
 	public static void RemovePackage(CommandSender sender, String name) {
-		@SuppressWarnings("unchecked")
-		ArrayList<String> installedList = (ArrayList<String>) config.get("installed");
+		File file = new File(Server.getInstance().getDataPath() + "plugins/" + name + ".jar");
 
-		if (!installedList.contains(name)) {
+		if (!file.exists()) {
 			sender.sendMessage("* NOT INSTALLED PACKAGE: " + name);
 			return;
 		}
+
+		Plugin plugin = Server.getInstance().getPluginManager().getPlugin(name);
+		if (plugin != null)
+			Server.getInstance().getPluginManager().disablePlugin(plugin);
+
+		file.delete();
+		sender.sendMessage("* SUCCESSFULLY DELETED PACKAGE: " + name);
 	}
 
 	@SuppressWarnings("unchecked")
-	public static void AddRepository(CommandSender sender, String url) {
-		ArrayList<String> list = (ArrayList<String>) config.get("repos");
-		list.add(url);
-		YUM.DownloadRepoData(url, sender.getName());
+	public static void AddRepository(CommandSender sender, String url, boolean isFullPack) {
+		if (!isFullPack) {
+			ArrayList<String> list = (ArrayList<String>) config.get("repos");
+			list.add(url);
+		} else {
+			ArrayList<String> list = (ArrayList<String>) config.get("fullrepos");
+			list.add(url);
+		}
+		YUM.DownloadRepoData(url, sender.getName(), isFullPack);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -85,11 +110,24 @@ public class YUM {
 
 	@SuppressWarnings("unchecked")
 	public static void Update(CommandSender sender) {
-		for (String urlString : (ArrayList<String>) config.get("repos"))
-			YUM.DownloadRepoData(urlString, sender.getName());
+		ArrayList<String> repos = (ArrayList<String>) config.get("repos");
+		ArrayList<String> fullrepos = (ArrayList<String>) config.get("fullrepos");
+
+		if (repos.isEmpty() && fullrepos.isEmpty()) {
+			sender.sendMessage("* REPOSITORY DATA IS EMPTY");
+			return;
+		}
+
+		String senderName = (sender == null) ? null : sender.getName();
+
+		for (String urlString : repos)
+			YUM.DownloadRepoData(urlString, senderName, false);
+
+		for (String urlString : fullrepos)
+			YUM.DownloadRepoData(urlString, senderName, true);
 	}
 
-	public static void DownloadRepoData(String urlString, String senderName) {
+	public static void DownloadRepoData(String urlString, String senderName, boolean isFullPack) {
 		Server.getInstance().getScheduler().scheduleAsyncTask(new AsyncTask() {
 			private String url, senderName;
 			private LinkedHashMap<String, Object> map = null;
@@ -105,16 +143,33 @@ public class YUM {
 				this.map = YUM.DownloadYUMJSON(url);
 			}
 
+			@SuppressWarnings("unchecked")
 			public void onCompletion(Server server) {
-				if (this.map != null)
-					YUM.linkMap.put(url, this.map);
+				if (this.map == null) {
+					Player player = server.getPlayer(this.senderName);
 
-				Player player = server.getPlayer(this.senderName);
+					if (player != null) {
+						player.sendMessage("* DEADLINK: " + url);
+					} else {
+						YUMPlugin.getInstance().getLogger().info("* DEADLINK: " + url);
+					}
+					return;
+				}
+
+				for (Entry<String, Object> entry : this.map.entrySet()) {
+					if (!isFullPack) {
+						YUM.repos.put(entry.getKey(), (LinkedTreeMap<String, Object>) entry.getValue());
+					} else {
+						YUM.fullrepos.put(entry.getKey(), (LinkedTreeMap<String, Object>) entry.getValue());
+					}
+				}
+
+				Player player = (this.senderName != null) ? server.getPlayer(this.senderName) : null;
 
 				if (player != null) {
-					player.sendMessage("* UPDATED " + url);
+					player.sendMessage("* UPDATED: " + url);
 				} else {
-					YUMPlugin.getInstance().getLogger().info("* UPDATED " + url);
+					YUMPlugin.getInstance().getLogger().info("* UPDATED: " + url);
 				}
 			}
 		}.setData(urlString, senderName));
@@ -144,10 +199,104 @@ public class YUM {
 	}
 
 	public static void Upgrade(CommandSender sender) {
-		//
+		Server server = Server.getInstance();
+
+		for (Plugin plugin : server.getPluginManager().getPlugins().values())
+			YUM.UpdatePlugin(sender, plugin.getName());
+
+		for (Entry<String, LinkedTreeMap<String, Object>> entry : YUM.fullrepos.entrySet()) {
+			String pluginName = entry.getKey();
+			String downloadLink = (String) entry.getValue().get("link");
+			String repoVersion = (String) entry.getValue().get("version");
+			YUM.UpdateJAR(pluginName, downloadLink, server.getDataPath() + "plugins/" + pluginName + ".jar",
+					repoVersion);
+		}
+	}
+
+	public static void UpdatePlugin(CommandSender sender, String pluginName) {
+		if (!YUM.repos.containsKey(pluginName))
+			return;
+
+		Server server = Server.getInstance();
+		Plugin plugin = server.getPluginManager().getPlugin(pluginName);
+
+		String repoVersion = (String) YUM.repos.get(pluginName).get("version");
+		String downloadLink = (String) YUM.repos.get(pluginName).get("link");
+
+		if (repoVersion == null || downloadLink == null)
+			return;
+
+		if (plugin != null) {
+			if (repoVersion.equals(plugin.getDescription().getVersion())) {
+				sender.sendMessage("* ALREADY UPDATED:" + pluginName);
+				return;
+			}
+		}
+
+		if (sender != null) {
+			sender.sendMessage("* UPDATE: " + pluginName + " [" + repoVersion + "]");
+		} else {
+			YUMPlugin.getInstance().getLogger().info("* UPDATE: " + pluginName + " [" + repoVersion + "]");
+		}
+
+		YUM.UpdateJAR(pluginName, downloadLink, server.getDataPath() + "plugins/" + pluginName + ".jar", repoVersion);
+	}
+
+	public static void UpdateJAR(String pluginName, String downloadLink, String path, String repoVersion) {
+		Server.getInstance().getScheduler().scheduleAsyncTask(new AsyncTask() {
+			private String link, pluginName, path, repoVersion;
+			private boolean success = false;
+
+			public AsyncTask setData(String pluginName, String link, String path, String repoVersion) {
+				this.pluginName = pluginName;
+				this.link = link;
+				this.path = path;
+				this.repoVersion = repoVersion;
+				return this;
+			}
+
+			@Override
+			public void onRun() {
+				File file = new File(this.path);
+				if (file.exists())
+					file.delete();
+
+				URL website;
+				try {
+					website = new URL(this.link);
+					try (InputStream in = website.openStream()) {
+						Files.copy(in, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+						this.success = true;
+					}
+				} catch (Exception e) {
+				}
+			}
+
+			public void onCompletion(Server server) {
+				if (!success) {
+					YUMPlugin.getInstance().getLogger().info("* PASS: " + this.pluginName);
+					return;
+				}
+				YUMPlugin.getInstance().getLogger()
+						.info("* UPDATED: " + this.pluginName + " [" + this.repoVersion + "]");
+			}
+		}.setData(pluginName, downloadLink, path, repoVersion));
 	}
 
 	public static void UpdateUpgrade() {
+		Server server = Server.getInstance();
 
+		server.getLogger().info("* AUTOMATIC UPDATE START..");
+		server.getLogger().info("* UPGRADE WILL BE START 10 SECONDS LATER..");
+
+		YUM.Update(null);
+
+		server.getScheduler().scheduleDelayedTask(new Task() {
+			@Override
+			public void onRun(int currentTick) {
+				server.getLogger().info("* AUTOMATIC UPGRADE START..");
+				YUM.Upgrade(null);
+			}
+		}, 200);
 	}
 }
