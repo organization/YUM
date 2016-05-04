@@ -33,10 +33,21 @@ public class YUM {
 		if (config.get("autoupgrade") == null || !(config.get("autoupgrade") instanceof Boolean))
 			config.set("autoupgrade", true);
 
+		if (config.get("autocoreupgrade") == null || !(config.get("autocoreupgrade") instanceof Boolean))
+			config.set("autocoreupgrade", true);
+
 		if (config.get("repos") == null || !(config.get("repos") instanceof ArrayList)) {
 			ArrayList<String> repos = new ArrayList<String>();
 			repos.add("https://github.com/organization/YUM/raw/master/YUM.json");
 			config.set("repos", repos);
+		}
+
+		if (config.get("coreversion") == null)
+			config.set("coreversion", (int) 0);
+
+		if (config.get("coreversion") instanceof Double) {
+			Double d = (Double) config.get("coreversion");
+			config.set("coreversion", d.intValue());
 		}
 
 		if (config.get("fullrepos") == null || !(config.get("fullrepos") instanceof ArrayList))
@@ -105,6 +116,18 @@ public class YUM {
 		} else {
 			config.set("autoupgrade", true);
 			sender.sendMessage("* AUTO UPGRADE HAS ENABLED");
+		}
+	}
+
+	public static void AutoCoreUpgrade(CommandSender sender) {
+		boolean toggleOn = (Boolean) config.get("autocoreupgrade");
+
+		if (toggleOn) {
+			config.set("autocoreupgrade", false);
+			sender.sendMessage("* AUTO CORE UPGRADE HAS DISABLED");
+		} else {
+			config.set("autocoreupgrade", true);
+			sender.sendMessage("* AUTO CORE UPGRADE HAS ENABLED");
 		}
 	}
 
@@ -211,6 +234,18 @@ public class YUM {
 			YUM.UpdateJAR(pluginName, downloadLink, server.getDataPath() + "plugins/" + pluginName + ".jar",
 					repoVersion);
 		}
+
+		String senderName = (sender != null) ? sender.getName() : null;
+		if (senderName == null) {
+			YUMPlugin.getInstance().getLogger().info("* AUTOMATIC UPGRADE CHECK FINISHED");
+		} else {
+			Player player = Server.getInstance().getPlayer(senderName);
+			if (player == null) {
+				YUMPlugin.getInstance().getLogger().info("* AUTOMATIC UPGRADE CHECK FINISHED");
+				return;
+			}
+			player.sendMessage("* AUTOMATIC UPGRADE CHECK FINISHED");
+		}
 	}
 
 	public static void UpdatePlugin(CommandSender sender, String pluginName) {
@@ -258,6 +293,10 @@ public class YUM {
 			@Override
 			public void onRun() {
 				File file = new File(this.path);
+
+				if (file.isDirectory())
+					return;
+
 				if (file.exists())
 					file.delete();
 
@@ -283,18 +322,132 @@ public class YUM {
 		}.setData(pluginName, downloadLink, path, repoVersion));
 	}
 
+	public static void UpdateCore(CommandSender sender) {
+		String senderName = (sender != null) ? sender.getName() : null;
+
+		if (sender == null || senderName == null) {
+			YUMPlugin.getInstance().getLogger().info("* AUTOMATIC CORE UPGRADE CHECK START..");
+		} else {
+			sender.sendMessage("* AUTOMATIC CORE UPGRADE CHECK START..");
+		}
+
+		Server.getInstance().getScheduler().scheduleAsyncTask(new AsyncTask() {
+			private String senderName;
+			private String serverPath;
+			private int serverCoreVersion;
+			private int nukkitRepoVersion;
+			private boolean isSucces = false;
+
+			private String message = null;
+
+			public AsyncTask setData(String senderName, int serverCoreVersion) {
+				this.senderName = senderName;
+				this.serverPath = Server.getInstance().getDataPath();
+				this.serverCoreVersion = serverCoreVersion;
+				return this;
+			}
+
+			@Override
+			public void onRun() {
+				File files = new File(this.serverPath);
+
+				if (!files.isDirectory())
+					return;
+
+				File matchFile = null;
+				for (File checkFile : files.listFiles()) {
+					if (!checkFile.getName().contains(".jar") || !checkFile.getName().contains("nukkit"))
+						continue;
+
+					matchFile = checkFile;
+					break;
+				}
+
+				if (matchFile == null)
+					return;
+
+				// CHECK IS NEED TO UPGRADE
+				URL nukkitLastBuildSite;
+				try {
+					nukkitLastBuildSite = new URL(
+							"http://ci.mengcraft.com:8080/job/nukkit/lastSuccessfulBuild/artifact/");
+					URLConnection urlConnection = nukkitLastBuildSite.openConnection();
+					urlConnection.setConnectTimeout(1000);
+					urlConnection.setReadTimeout(1000);
+
+					@SuppressWarnings("resource")
+					BufferedReader breader = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
+					StringBuilder stringBuilder = new StringBuilder();
+
+					String line;
+					while ((line = breader.readLine()) != null)
+						stringBuilder.append(line);
+
+					String nukkitLastBuildSiteSource = stringBuilder.toString();
+
+					nukkitLastBuildSiteSource = (nukkitLastBuildSiteSource
+							.split("<title>Artifacts of Nukkit #").length > 1)
+									? nukkitLastBuildSiteSource.split("<title>Artifacts of Nukkit #")[1] : null;
+					if (nukkitLastBuildSiteSource == null)
+						return;
+
+					nukkitLastBuildSiteSource = (nukkitLastBuildSiteSource.split(" ").length > 1)
+							? nukkitLastBuildSiteSource.split(" ")[0] : null;
+					if (nukkitLastBuildSiteSource == null)
+						return;
+
+					nukkitRepoVersion = Integer.valueOf(nukkitLastBuildSiteSource);
+					if (nukkitRepoVersion <= serverCoreVersion) {
+						message = "* ALREADY INSTALLED HIGHEST NUKKIT VERSION";
+						return;
+					}
+
+					if (matchFile.exists())
+						matchFile.delete();
+
+					YUM.UpdateJAR("NUKKIT CORE",
+							"http://ci.mengcraft.com:8080/job/nukkit/lastSuccessfulBuild/artifact/target/nukkit-1.0-SNAPSHOT.jar",
+							matchFile.getAbsolutePath(), "#" + String.valueOf(nukkitRepoVersion));
+
+					this.isSucces = true;
+				} catch (Exception e) {
+				}
+			}
+
+			public void onCompletion(Server server) {
+				Player player = (senderName != null) ? server.getPlayer(senderName) : null;
+
+				if (senderName == null || player == null) {
+					YUMPlugin.getInstance().getLogger().info("* AUTOMATIC CORE UPGRADE CHECK FINISHED");
+					if (this.message != null)
+						YUMPlugin.getInstance().getLogger().info(this.message);
+				} else {
+					player.sendMessage("* AUTOMATIC CORE UPGRADE CHECK FINISHED");
+					if (this.message != null)
+						player.sendMessage(this.message);
+				}
+
+				if (!this.isSucces)
+					return;
+
+				YUM.config.set("coreversion", (int) nukkitRepoVersion);
+			}
+		}.setData(senderName, (int) config.get("coreversion")));
+	}
+
 	public static void UpdateUpgrade() {
 		Server server = Server.getInstance();
 
-		server.getLogger().info("* AUTOMATIC UPDATE START..");
-		server.getLogger().info("* UPGRADE WILL BE START 10 SECONDS LATER..");
+		YUMPlugin plugin = YUMPlugin.getInstance();
+		plugin.getLogger().info("* AUTOMATIC UPDATE START..");
+		plugin.getLogger().info("* UPGRADE WILL BE START 10 SECONDS LATER..");
 
 		YUM.Update(null);
 
 		server.getScheduler().scheduleDelayedTask(new Task() {
 			@Override
 			public void onRun(int currentTick) {
-				server.getLogger().info("* AUTOMATIC UPGRADE START..");
+				plugin.getLogger().info("* AUTOMATIC UPGRADE CHECK START..");
 				YUM.Upgrade(null);
 			}
 		}, 200);

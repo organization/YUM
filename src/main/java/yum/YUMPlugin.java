@@ -28,7 +28,12 @@ public class YUMPlugin extends PluginBase {
 	public void onEnable() {
 		this.registerPermission("yum.commands.run", true, "JAR Package Online Install&Update Permission");
 		this.registerCommand("yum", "yum.commands.run", "JAR Package Online Install&Update", "/yum");
-		YUM.UpdateUpgrade();
+
+		if ((boolean) YUM.config.get("autoupgrade"))
+			YUM.UpdateUpgrade();
+
+		if ((boolean) YUM.config.get("autocoreupgrade"))
+			YUM.UpdateCore(null);
 	}
 
 	@Override
@@ -86,6 +91,11 @@ public class YUMPlugin extends PluginBase {
 			case "upgrade":
 				YUM.Upgrade(sender);
 				break;
+			case "autocoreupgrade":
+
+				break;
+			case "coreupgrade":
+				break;
 			default:
 				this.sendHelpMessage(sender);
 				break;
@@ -104,6 +114,8 @@ public class YUMPlugin extends PluginBase {
 		sender.sendMessage("/YUM AUTOUPGRADE - TURN AUTOMATIC UPDATING ON OR OFF");
 		sender.sendMessage("/YUM UPDATE - UPDATE DOWNLOAD LINK FROM THE REPO");
 		sender.sendMessage("/YUM UPGRADE - UPGRADE THE PLUG-INS.");
+		sender.sendMessage("/YUM AUTOCOREUPGRADE - TURN AUTO CORE-UPDATING ON OR OFF");
+		sender.sendMessage("/YUM COREUPGRADE - UPGRADE THE NUKKIT CORE JAR FILE");
 	}
 
 	protected boolean registerCommand(String commandName, String permissionName, String commandDescription,
