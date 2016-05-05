@@ -474,7 +474,7 @@ public class YUM {
 		plugin.getLogger().info("* AUTOMATIC UPDATE START..");
 		plugin.getLogger().info("* UPGRADE WILL BE START 10 SECONDS LATER..");
 
-		YUM.Update(null);
+		YUM.Update(plugin.getServer().getConsoleSender());
 
 		server.getScheduler().scheduleDelayedTask(new Task() {
 			@Override
