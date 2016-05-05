@@ -141,12 +141,17 @@ public class YUM {
 		ArrayList<String> repos = (ArrayList<String>) config.get("repos");
 		ArrayList<String> fullrepos = (ArrayList<String>) config.get("fullrepos");
 
+		String senderName = (sender == null) ? null : sender.getName();
+
 		if (repos.isEmpty() && fullrepos.isEmpty()) {
-			sender.sendMessage("* REPOSITORY DATA IS EMPTY");
+			Player player = Server.getInstance().getPlayer(senderName);
+			if (player != null) {
+				YUMPlugin.getInstance().getLogger().info("* REPOSITORY DATA IS EMPTY");
+			} else {
+				sender.sendMessage("* REPOSITORY DATA IS EMPTY");
+			}
 			return;
 		}
-
-		String senderName = (sender == null) ? null : sender.getName();
 
 		for (String urlString : repos)
 			YUM.DownloadRepoData(urlString, senderName, false);
@@ -474,7 +479,7 @@ public class YUM {
 		plugin.getLogger().info("* AUTOMATIC UPDATE START..");
 		plugin.getLogger().info("* UPGRADE WILL BE START 10 SECONDS LATER..");
 
-		YUM.Update(plugin.getServer().getConsoleSender());
+		YUM.Update(null);
 
 		server.getScheduler().scheduleDelayedTask(new Task() {
 			@Override
