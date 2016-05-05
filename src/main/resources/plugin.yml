@@ -1,5 +1,5 @@
 name: YUM
 main: yum.YUMPlugin
-version: "1.0.2"
-author: hmhmmhm
+version: "1.0.3"
+author: "Organization"
 api: ["1.0.0"]

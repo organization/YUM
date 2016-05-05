@@ -304,35 +304,34 @@ public class YUM {
 			public void onRun() {
 				File files = new File(this.path);
 
-				if (!files.isDirectory())
-					return;
-
 				File matchFile = null;
-				for (File file : files.listFiles()) {
-					if (!file.getName().toLowerCase().contains(".jar"))
-						continue;
-
-					PluginDescription description = null;
-					try {
-						JarFile jar = new JarFile(file);
-						JarEntry entry = jar.getJarEntry("plugin.yml");
-						if (entry == null)
+				if (files.isDirectory()) {
+					for (File file : files.listFiles()) {
+						if (!file.getName().toLowerCase().contains(".jar"))
 							continue;
-						InputStream stream = jar.getInputStream(entry);
-						description = new PluginDescription(Utils.readFile(stream));
-					} catch (IOException e) {
-					}
 
-					if (description == null)
-						continue;
+						PluginDescription description = null;
+						try {
+							JarFile jar = new JarFile(file);
+							JarEntry entry = jar.getJarEntry("plugin.yml");
+							if (entry == null)
+								continue;
+							InputStream stream = jar.getInputStream(entry);
+							description = new PluginDescription(Utils.readFile(stream));
+						} catch (IOException e) {
+						}
 
-					if (description.getName().toLowerCase().equals(pluginName.toLowerCase())) {
-						matchFile = file;
-						break;
+						if (description == null)
+							continue;
+
+						if (description.getName().toLowerCase().equals(pluginName.toLowerCase())) {
+							matchFile = file;
+							break;
+						}
 					}
+				}else{
+					matchFile = files;
 				}
-				if (matchFile == null)
-					matchFile = new File(this.path + pluginName + ".jar");
 
 				if (matchFile.exists())
 					matchFile.delete();
