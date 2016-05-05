@@ -2,6 +2,7 @@ package yum;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLConnection;
@@ -10,6 +11,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import com.google.gson.GsonBuilder;
 import com.google.gson.internal.LinkedTreeMap;
@@ -19,9 +22,11 @@ import cn.nukkit.Player;
 import cn.nukkit.Server;
 import cn.nukkit.command.CommandSender;
 import cn.nukkit.plugin.Plugin;
+import cn.nukkit.plugin.PluginDescription;
 import cn.nukkit.scheduler.AsyncTask;
 import cn.nukkit.scheduler.Task;
 import cn.nukkit.utils.Config;
+import cn.nukkit.utils.Utils;
 import jline.internal.InputStreamReader;
 
 public class YUM {
@@ -274,7 +279,7 @@ public class YUM {
 			YUMPlugin.getInstance().getLogger().info("* UPDATE: " + pluginName + " [" + repoVersion + "]");
 		}
 
-		YUM.UpdateJAR(pluginName, downloadLink, server.getDataPath() + "plugins/" + pluginName + ".jar", repoVersion);
+		YUM.UpdateJAR(pluginName, downloadLink, server.getDataPath() + "plugins/", repoVersion);
 	}
 
 	public static void UpdateJAR(String pluginName, String downloadLink, String path, String repoVersion) {
@@ -292,19 +297,46 @@ public class YUM {
 
 			@Override
 			public void onRun() {
-				File file = new File(this.path);
+				File files = new File(this.path);
 
-				if (file.isDirectory())
+				if (!files.isDirectory())
 					return;
 
-				if (file.exists())
-					file.delete();
+				File matchFile = null;
+				for (File file : files.listFiles()) {
+					if (!file.getName().toLowerCase().contains(".jar"))
+						continue;
+
+					PluginDescription description = null;
+					try {
+						JarFile jar = new JarFile(file);
+						JarEntry entry = jar.getJarEntry("plugin.yml");
+						if (entry == null)
+							continue;
+						InputStream stream = jar.getInputStream(entry);
+						description = new PluginDescription(Utils.readFile(stream));
+					} catch (IOException e) {
+					}
+
+					if (description == null)
+						continue;
+
+					if (description.getName().toLowerCase().equals(pluginName.toLowerCase())) {
+						matchFile = file;
+						break;
+					}
+				}
+				if (matchFile == null)
+					matchFile = new File(this.path + pluginName + ".jar");
+
+				if (matchFile.exists())
+					matchFile.delete();
 
 				URL website;
 				try {
 					website = new URL(this.link);
 					try (InputStream in = website.openStream()) {
-						Files.copy(in, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+						Files.copy(in, matchFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 						this.success = true;
 					}
 				} catch (Exception e) {

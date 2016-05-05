@@ -92,9 +92,10 @@ public class YUMPlugin extends PluginBase {
 				YUM.Upgrade(sender);
 				break;
 			case "autocoreupgrade":
-
+				YUM.AutoCoreUpgrade(sender);
 				break;
 			case "coreupgrade":
+				YUM.UpdateCore(sender);
 				break;
 			default:
 				this.sendHelpMessage(sender);
